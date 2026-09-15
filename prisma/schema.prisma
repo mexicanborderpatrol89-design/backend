@@ -1,0 +1,120 @@
+// Skyro Obedy — school canteen lunch ordering.
+// Simplified hackathon build: raw integer balance on Account (no ledger),
+// no chat, no announcement read-receipts, no weekly menu template.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  MANAGER
+}
+
+enum MealCategory {
+  MEAT
+  POULTRY
+  VEGETARIAN
+  FISH
+  SOUP_DESSERT
+}
+
+enum OrderStatus {
+  OPEN
+  ORDERED
+  CHANGED
+  CANCELLED
+  SERVED
+  AUTO_CANCELLED
+}
+
+/// A person in the system: student or canteen manager.
+/// `id` is our business key; `username` is the login handle.
+/// `balanceCents` is the whole wallet: no ledger table, one int.
+model Account {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String? // MD5 of the password (hackathon-grade security)
+  role         Role
+  name         String
+  active       Boolean  @default(true)
+  classCode    String? // "3.A", students only
+  balanceCents Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  orders        Order[]
+  announcements Announcement[]
+}
+
+/// One dish that can appear on menus. Allergens keep the EU Annex II
+/// display format ("1, 7") plus the "veg" tag, as printed in the UI.
+model Meal {
+  id        String       @id @default(cuid())
+  name      String
+  desc      String
+  category  MealCategory
+  allergens String[]
+  icon      String
+  tint      String // pastel category tint: t-peach, t-blue, t-green, t-lilac, t-cream
+
+  servedOn MealOnDay[]
+}
+
+/// A school day: whether lunch is served (holidays = false).
+/// Ordering deadline is always "the day before at 14:00".
+model SchoolDay {
+  mealDate  DateTime @id // date at 00:00, local midnight
+  isServing Boolean  @default(true)
+  meals     MealOnDay[]
+}
+
+/// The real "menu for day X": manager enters which meals which slot.
+/// `capacity` = kitchen portions (the fixture sums to 184).
+/// `orderCount` = current number of ordered portions (a lock, not the capacity).
+model MealOnDay {
+  id         String   @id @default(cuid())
+  mealDate   DateTime
+  day        SchoolDay @relation(fields: [mealDate], references: [mealDate], onDelete: Cascade)
+  mealId     String
+  meal       Meal     @relation(fields: [mealId], references: [id])
+  slot       Int // "Obed 1..9"
+  capacity   Int      @default(0)
+  orderCount Int      @default(0)
+  orders     Order[]
+
+  @@unique([mealDate, slot])
+  @@index([mealDate])
+}
+
+/// A student's lunch order for one day. Unique on (student, mealOnDay)
+/// prevents double orders. Status lifecycle: ORDERED -> CANCELLED | SERVED.
+model Order {
+  id          String      @id @default(cuid())
+  studentId   String
+  student     Account     @relation(fields: [studentId], references: [id])
+  mealOnDayId String
+  mealOnDay   MealOnDay   @relation(fields: [mealOnDayId], references: [id])
+  status      OrderStatus @default(ORDERED)
+  createdAt   DateTime    @default(now())
+
+  @@unique([studentId, mealOnDayId])
+  @@index([studentId])
+  @@index([mealOnDayId])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  important Boolean  @default(false)
+  authorId  String
+  author    Account  @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
