@@ -6,7 +6,16 @@ let _db: PrismaClient | null = null;
 
 function getDb(): PrismaClient {
   _db ??= new PrismaClient({
-    adapter: new PrismaPg({ connectionString: requireDatabaseUrl() }),
+    adapter: new PrismaPg(
+      {
+        connectionString: requireDatabaseUrl(),
+        connectionTimeoutMillis: 10_000,
+        query_timeout: 20_000,
+        idleTimeoutMillis: 30_000,
+        max: 5,
+      },
+      { onPoolError: (err) => console.error("[pool]", err.message) },
+    ),
   });
   return _db;
 }
