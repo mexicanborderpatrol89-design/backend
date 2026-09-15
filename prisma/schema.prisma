@@ -39,7 +39,7 @@ enum OrderStatus {
 model Account {
   id           String   @id @default(cuid())
   username     String   @unique
-  passwordHash String? // MD5 of the password (hackathon-grade security)
+  passwordHash String? // argon2id hash of the password (Bun.password, salted)
   role         Role
   name         String
   active       Boolean  @default(true)

@@ -7,6 +7,7 @@ import { menuRoutes } from "./modules/menu.routes";
 import { ordersRoutes } from "./modules/orders.routes";
 import { announcementsRoutes } from "./modules/announcements.routes";
 import { studentsRoutes } from "./modules/students.routes";
+import { menuAdminRoutes } from "./modules/menu-admin.routes";
 
 const app = new Elysia()
   .use(
@@ -22,6 +23,7 @@ const app = new Elysia()
   .use(ordersRoutes)
   .use(announcementsRoutes)
   .use(studentsRoutes)
+  .use(menuAdminRoutes)
   .get("/health", () => ({ ok: true }))
   .get("/", () => ({
     name: "skyro-obedy-api",
@@ -36,9 +38,13 @@ const app = new Elysia()
       "GET /announcements | POST /announcements",
       "(manager)",
       "GET/PATCH /students",
+      "POST /students",
       "POST /students/:id/topup",
+      "POST /students/:id/password",
       "POST /orders/:id/serve",
       "GET /orders?format=csv",
+      "PUT /menu/:date",
+      "PATCH /school-days/:date",
     ],
   }));
 

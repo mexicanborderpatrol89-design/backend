@@ -1,6 +1,9 @@
-import { createHash } from "node:crypto";
+/// Password hashing with Bun's argon2id — salted, memory-hard, intentionally
+/// slow. Safe for real student data in a school deployment.
+export function hashPassword(plain: string): Promise<string> {
+  return Bun.password.hash(plain);
+}
 
-/// MD5 hash for hackathon-grade passwords. NOT secure for real use.
-export function md5(input: string): string {
-  return createHash("md5").update(input).digest("hex");
+export function verifyPassword(plain: string, hash: string): Promise<boolean> {
+  return Bun.password.verify(plain, hash);
 }

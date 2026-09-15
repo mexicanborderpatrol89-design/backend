@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { db } from "../db";
 import { signToken } from "../auth";
 import { createRouter } from "../errors";
-import { md5 } from "../lib/password";
+import { verifyPassword } from "../lib/password";
 
 /// POST /auth/login — username + password, returns a Bearer token.
 export const authRoutes = createRouter().post(
@@ -11,7 +11,11 @@ export const authRoutes = createRouter().post(
     const account = await db.account.findUnique({
       where: { username: body.username },
     });
-    if (!account || !account.passwordHash || account.passwordHash !== md5(body.password)) {
+    if (
+      !account ||
+      !account.passwordHash ||
+      !(await verifyPassword(body.password, account.passwordHash))
+    ) {
       set.status = 401;
       return { error: "BAD_CREDENTIALS", message: "Nesprávne prihlasovacie údaje" };
     }

@@ -3,7 +3,7 @@
 // Balances are plain integers on Account — no ledger table.
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { md5 } from "../src/lib/password";
+import { hashPassword } from "../src/lib/password";
 import "dotenv/config";
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -35,7 +35,8 @@ const MEALS: SeedMeal[] = [
   { name: "Caesar šalát s kuracím mäsom", desc: "Rímsky šalát, krutóny, parmezán, dresing", category: "POULTRY", tint: "t-blue", allergens: ["1, 3, 4, 7"], icon: "local_dining", capacity: 8 },
 ];
 
-const SEED_PASSWORD = "heslo123";
+const SEED_PASSWORD = "cajkovskeho48";
+const SEED_PASSWORD_HASH = await hashPassword(SEED_PASSWORD);
 
 const utcDay = (day: number) => new Date(Date.UTC(2026, 8, day));
 
@@ -51,9 +52,9 @@ async function main() {
   const manager = await prisma.account.create({
     data: {
       role: "MANAGER",
-      name: "Katarína Vrábľová",
-      username: "vrablova",
-      passwordHash: md5(SEED_PASSWORD),
+      name: "Vedúca jedálne",
+      username: "prengac",
+      passwordHash: SEED_PASSWORD_HASH,
     },
   });
 
@@ -75,10 +76,10 @@ async function main() {
         role: "STUDENT",
         name: s.name,
         username: s.username,
-        passwordHash: md5(SEED_PASSWORD),
         classCode: s.classCode,
         active: s.active ?? true,
         balanceCents: s.balance,
+        passwordHash: SEED_PASSWORD_HASH,
       },
     });
   }

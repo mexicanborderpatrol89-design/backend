@@ -3,10 +3,15 @@ import { requireAccount } from "../auth";
 import { db } from "../db";
 import { createRouter } from "../errors";
 import { dateKey, schoolWeek, toLocalDay } from "../lib/dates";
-import { dayFacts } from "../lib/menu";
-import { categoryLabel, dateLabel, dayNameLabel, dayShort } from "../lib/format";
+import { dayFacts, orderableDay } from "../lib/menu";
+import {
+  categoryLabel,
+  dateLabel,
+  dayNameLabel,
+  dayShort,
+} from "../lib/format";
 
-function mealDto(m: {
+export function mealDto(m: {
   id: string;
   name: string;
   desc: string;
@@ -23,6 +28,29 @@ function mealDto(m: {
     tint: m.tint,
     allergens: m.allergens,
     icon: m.icon,
+  };
+}
+
+/// The read-side row shape /menu/today, /menu/week and PUT /menu/:date share.
+export function mealRowDto(m: {
+  id: string;
+  mealOnDayId: string;
+  slot: number;
+  name: string;
+  desc: string;
+  category: import("../generated/prisma/client").MealCategory;
+  tint: string;
+  allergens: string[];
+  icon: string;
+  capacity: number;
+  orderCount: number;
+}) {
+  return {
+    mealOnDayId: m.mealOnDayId,
+    slot: m.slot,
+    ...mealDto(m),
+    capacity: m.capacity,
+    orderCount: m.orderCount,
   };
 }
 
@@ -45,9 +73,30 @@ export const menuRoutes = createRouter()
     async ({ headers, query }) => {
       const me = await requireAccount(headers);
       const now = new Date();
+
+      /// Probe the next 14 days for the first one currently orderable,
+      /// so the student home is never a calendar day that has already
+      /// passed its own deadline (the window for D closes on D−1).
+      const probeStart = toLocalDay(now);
+      const probe = Array.from({ length: 14 }, (_, i) => {
+        const d = new Date(probeStart);
+        d.setUTCDate(probeStart.getUTCDate() + i);
+        return d;
+      });
+      const servings = await db.schoolDay.findMany({
+        where: { mealDate: { in: probe } },
+        select: { mealDate: true, isServing: true },
+      });
+      const servingMap = new Map(
+        servings.map((s) => [dateKey(s.mealDate), s.isServing]),
+      );
+
       const today = query.date
         ? new Date(`${query.date}T00:00:00Z`)
-        : toLocalDay(now);
+        : (() => {
+            const key = orderableDay(now, (k) => servingMap.get(k) ?? true);
+            return key ? new Date(`${key}T00:00:00Z`) : probeStart;
+          })();
 
       const [day, mealOnDay, orders] = await Promise.all([
         db.schoolDay.findUnique({ where: { mealDate: today } }),
@@ -57,18 +106,24 @@ export const menuRoutes = createRouter()
           orderBy: { slot: "asc" },
         }),
         db.order.findMany({
-          where: { studentId: me.id, mealOnDay: { mealDate: today } },
+          where: {
+            studentId: me.id,
+            mealOnDay: { mealDate: today },
+            status: { notIn: ["CANCELLED", "AUTO_CANCELLED"] },
+          },
           include: { mealOnDay: true },
         }),
       ]);
 
       const wrapper = dayWrap(today, day, now);
       const meals = mealOnDay.map((m) => ({
-        mealOnDayId: m.id,
-        slot: m.slot,
-        ...mealDto(m.meal),
-        capacity: m.capacity,
-        orderCount: m.orderCount,
+        ...mealRowDto({
+          ...m.meal,
+          mealOnDayId: m.id,
+          slot: m.slot,
+          capacity: m.capacity,
+          orderCount: m.orderCount,
+        }),
         orderedByMe: orders.some((o) => o.mealOnDayId === m.id),
       }));
 
@@ -82,6 +137,7 @@ export const menuRoutes = createRouter()
         meals,
         myOrder: mine
           ? {
+              id: mine.id,
               mealOnDayId: mine.mealOnDayId,
               slot: mine.mealOnDay.slot,
               meal: meal ? mealDto(meal) : null,
@@ -111,7 +167,11 @@ export const menuRoutes = createRouter()
           orderBy: [{ mealDate: "asc" }, { slot: "asc" }],
         }),
         db.order.findMany({
-          where: { studentId: me.id, mealOnDay: { mealDate: { in: week } } },
+          where: {
+            studentId: me.id,
+            mealOnDay: { mealDate: { in: week } },
+            status: { notIn: ["CANCELLED", "AUTO_CANCELLED"] },
+          },
           include: { mealOnDay: true },
         }),
       ]);
@@ -134,14 +194,17 @@ export const menuRoutes = createRouter()
             dateNumber: d.getUTCDate(),
             shortLabel: dateLabel(key),
             meals: rows.map((m) => ({
-              mealOnDayId: m.id,
-              slot: m.slot,
-              ...mealDto(m.meal),
-              capacity: m.capacity,
-              orderCount: m.orderCount,
+              ...mealRowDto({
+                ...m.meal,
+                mealOnDayId: m.id,
+                slot: m.slot,
+                capacity: m.capacity,
+                orderCount: m.orderCount,
+              }),
             })),
             myOrder: order
               ? {
+                  id: order.id,
                   mealOnDayId: order.mealOnDayId,
                   slot: order.mealOnDay.slot,
                   meal: rows.find((m) => m.id === order.mealOnDayId)?.meal
