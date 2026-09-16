@@ -50,12 +50,25 @@ export const ordersRoutes = createRouter()
         if (!mealOnDay) throw new ApiError(404, "NOT_FOUND", "Jedlo sa nenašlo");
         assertCanOrder(mealOnDay, now);
 
-        const existing = await tx.order.findUnique({
+        const existing = await tx.order.findFirst({
           where: {
-            studentId_mealOnDayId: { studentId: me.id, mealOnDayId: mealOnDay.id },
+            studentId: me.id,
+            mealDate: mealOnDay.mealDate,
+            status: { notIn: ["CANCELLED", "AUTO_CANCELLED"] },
           },
         });
-        if (existing) return existing; // idempotent re-confirm
+        // Same dish again -> idempotent re-confirm, charged once.
+        if (existing?.mealOnDayId === mealOnDay.id) return existing;
+        // A different dish on the same day is a change, not a second lunch.
+        // Changing goes through PATCH /orders/:id, which moves the seat
+        // without moving money.
+        if (existing) {
+          throw new ApiError(
+            409,
+            "ALREADY_ORDERED",
+            "Na tento deň už obed objednaný máte. Zmeňte ho namiesto objednávania ďalšieho.",
+          );
+        }
 
         const account = await tx.account.findUnique({ where: { id: me.id } });
         if (!account) throw new ApiError(401, "UNAUTHORIZED", "Prihláste sa");
@@ -79,7 +92,12 @@ export const ordersRoutes = createRouter()
           data: { orderCount: { increment: 1 } },
         });
         return tx.order.create({
-          data: { studentId: me.id, mealOnDayId: mealOnDay.id, status: "ORDERED" },
+          data: {
+            studentId: me.id,
+            mealOnDayId: mealOnDay.id,
+            mealDate: mealOnDay.mealDate,
+            status: "ORDERED",
+          },
         });
       });
 

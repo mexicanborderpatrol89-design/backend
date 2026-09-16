@@ -97,19 +97,24 @@ model MealOnDay {
 }
 
 /// A student's lunch order for one day. Unique on (student, mealOnDay)
-/// prevents double orders. Status lifecycle: ORDERED -> CANCELLED | SERVED.
+/// prevents *double orders of the same dish*. `mealDate` is denormalised
+/// from MealOnDay so a partial unique index can enforce the business rule
+/// "one live lunch per pupil per day" (a hop through MealOnDay cannot be
+/// the target of a plain unique constraint).
 model Order {
   id          String      @id @default(cuid())
   studentId   String
   student     Account     @relation(fields: [studentId], references: [id])
   mealOnDayId String
   mealOnDay   MealOnDay   @relation(fields: [mealOnDayId], references: [id])
+  mealDate    DateTime
   status      OrderStatus @default(ORDERED)
   createdAt   DateTime    @default(now())
 
   @@unique([studentId, mealOnDayId])
   @@index([studentId])
   @@index([mealOnDayId])
+  @@index([studentId, mealDate])
 }
 
 model Announcement {

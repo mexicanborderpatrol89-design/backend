@@ -131,7 +131,13 @@ async function main() {
   async function placeOrder(student: string, dayKey: string, slot: number, status: "ORDERED" | "CANCELLED" | "SERVED", at: string) {
     const modId = mealOnDayIds.get(`${dayKey}|${slot}`)!;
     await prisma.order.create({
-      data: { studentId: student, mealOnDayId: modId, status, createdAt: new Date(at) },
+      data: {
+        studentId: student,
+        mealOnDayId: modId,
+        mealDate: new Date(`${dayKey}T00:00:00Z`),
+        status,
+        createdAt: new Date(at),
+      },
     });
     if (status !== "CANCELLED") {
       await prisma.mealOnDay.update({ where: { id: modId }, data: { orderCount: { increment: 1 } } });
@@ -148,7 +154,6 @@ async function main() {
   await placeOrder("s1", "2026-09-15", 3, "ORDERED", "2026-09-12T08:58:00Z");
   await placeOrder("s1", "2026-09-16", 5, "ORDERED", "2026-09-14T07:02:00Z");
   await placeOrder("s7", "2026-09-16", 1, "ORDERED", "2026-09-14T07:40:00Z");
-  await placeOrder("s7", "2026-09-16", 3, "ORDERED", "2026-09-14T08:05:00Z");
 
   // Announcements.
   await prisma.announcement.create({
