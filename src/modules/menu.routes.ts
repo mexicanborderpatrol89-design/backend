@@ -3,7 +3,7 @@ import { requireAccount } from "../auth";
 import { db } from "../db";
 import { createRouter } from "../errors";
 import { dateKey, schoolWeek, toLocalDay } from "../lib/dates";
-import { dayFacts, orderableDay } from "../lib/menu";
+import { dayFacts } from "../lib/menu";
 import {
   categoryLabel,
   dateLabel,
@@ -74,29 +74,12 @@ export const menuRoutes = createRouter()
       const me = await requireAccount(headers);
       const now = new Date();
 
-      /// Probe the next 14 days for the first one currently orderable,
-      /// so the student home is never a calendar day that has already
-      /// passed its own deadline (the window for D closes on D−1).
-      const probeStart = toLocalDay(now);
-      const probe = Array.from({ length: 14 }, (_, i) => {
-        const d = new Date(probeStart);
-        d.setUTCDate(probeStart.getUTCDate() + i);
-        return d;
-      });
-      const servings = await db.schoolDay.findMany({
-        where: { mealDate: { in: probe } },
-        select: { mealDate: true, isServing: true },
-      });
-      const servingMap = new Map(
-        servings.map((s) => [dateKey(s.mealDate), s.isServing]),
-      );
-
+      /// The calendar day. After its 08:00 deadline (school time) the card
+      /// reads closed for the rest of the day; ordering ahead moves to the
+      /// week screen. `?date=` selects a different day the same way.
       const today = query.date
         ? new Date(`${query.date}T00:00:00Z`)
-        : (() => {
-            const key = orderableDay(now, (k) => servingMap.get(k) ?? true);
-            return key ? new Date(`${key}T00:00:00Z`) : probeStart;
-          })();
+        : toLocalDay(now);
 
       const [day, mealOnDay, orders] = await Promise.all([
         db.schoolDay.findUnique({ where: { mealDate: today } }),

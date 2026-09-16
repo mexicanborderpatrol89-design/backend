@@ -40,21 +40,32 @@ export function schoolWeek(d: Date): Date[] {
   });
 }
 
-/** Ordering deadline: the day before the meal at the configured hour (14:00).
- *  You order "tomorrow's" lunch by 14:00 today. */
-export function defaultDeadline(mealDay: Date): Date {
-  const prev = new Date(mealDay);
-  prev.setUTCDate(prev.getUTCDate() - 1);
-  prev.setUTCHours(config.defaultDeadlineHour, 0, 0, 0);
-  return prev;
+/** UTC offset of SCHOOL_TZ, in minutes, at the instant `at`. */
+function offsetMinutes(at: Date): number {
+  const name =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: SCHOOL_TZ,
+      timeZoneName: "longOffset",
+    })
+      .formatToParts(at)
+      .find((p) => p.type === "timeZoneName")?.value ?? "GMT+00:00";
+  const m = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
+  return m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
 }
 
-/** Opening of the ordering window: the same civil day as the *deadline* at
- *  08:00. Ordering for day D runs from (D−1) 08:00 to (D−1) 14:00. */
-export function windowOpen(deadline: Date): Date {
-  const d = new Date(deadline);
-  d.setUTCHours(config.windowOpenHour, 0, 0, 0);
-  return d;
+/** `civilDay` (stored as UTC midnight by toLocalDay) at `hour` school-local
+ *  time, as a real instant. Slovakia shifts clocks at 02:00–03:00 local, so
+ *  an 08:00 deadline is never in an ambiguous or skipped hour. */
+export function atSchoolHour(civilDay: Date, hour: number): Date {
+  const naive = new Date(civilDay);
+  naive.setUTCHours(hour, 0, 0, 0);
+  return new Date(naive.getTime() - offsetMinutes(naive) * 60_000);
+}
+
+/** Ordering deadline: 08:00 on the meal day itself, in school time.
+ *  A pupil ordering Thursday's lunch has until Thursday 08:00. */
+export function defaultDeadline(mealDay: Date): Date {
+  return atSchoolHour(mealDay, config.defaultDeadlineHour);
 }
 
 /** Seconds until `deadline` from `now` (0 if already past). */
@@ -62,7 +73,8 @@ export function secondsUntil(now: Date, deadline: Date): number {
   return Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
 }
 
-/** True once the ordering window is open but not yet closed. */
+/** The window has no lower bound: a day is orderable from the moment its menu
+ *  exists until the deadline passes. */
 export function isOrderingOpen(now: Date, deadline: Date): boolean {
-  return now >= windowOpen(deadline) && now < deadline;
+  return now < deadline;
 }

@@ -31,6 +31,7 @@ const app = new Elysia()
     endpoints: [
       "GET /health",
       "POST /auth/login",
+      "GET /auth/status | POST /auth/claim",
       "GET /me",
       "GET /menu/today | /menu/week",
       "POST/PATCH/DELETE /orders",

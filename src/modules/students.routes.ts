@@ -2,6 +2,7 @@ import { t } from "elysia";
 import { requireManager } from "../auth";
 import { db } from "../db";
 import { ApiError, createRouter } from "../errors";
+import { claimExpiry, generateClaimCode } from "../lib/claim";
 import { hashPassword } from "../lib/password";
 
 export const studentsRoutes = createRouter()
@@ -19,7 +20,7 @@ export const studentsRoutes = createRouter()
           "Meno a používateľské meno sú povinné",
         );
       }
-      if (password.length < 4) {
+      if (password && password.length < 4) {
         throw new ApiError(
           400,
           "VALIDATION",
@@ -34,6 +35,9 @@ export const studentsRoutes = createRouter()
           `Používateľské meno ${username} je už obsadené`,
         );
       }
+      // With a password the account can sign in immediately; without one a
+      // single-use claim code is generated for the pupil's first login.
+      const hasClaimCode = !password;
       const student = await db.account.create({
         data: {
           role: "STUDENT",
@@ -42,7 +46,9 @@ export const studentsRoutes = createRouter()
           classCode: body.classCode?.trim() || null,
           active: true,
           balanceCents: 0,
-          passwordHash: await hashPassword(password),
+          passwordHash: password ? await hashPassword(password) : null,
+          claimCode: hasClaimCode ? generateClaimCode() : null,
+          claimCodeExpires: hasClaimCode ? claimExpiry() : null,
         },
         select: {
           id: true,
@@ -51,6 +57,8 @@ export const studentsRoutes = createRouter()
           classCode: true,
           active: true,
           balanceCents: true,
+          claimCode: true,
+          claimCodeExpires: true,
         },
       });
       set.status = 201;
@@ -61,7 +69,7 @@ export const studentsRoutes = createRouter()
         name: t.String(),
         username: t.String(),
         classCode: t.Optional(t.String()),
-        password: t.String(),
+        password: t.Optional(t.String()),
       }),
     },
   )

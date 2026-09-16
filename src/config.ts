@@ -14,8 +14,11 @@ export const config = {
   corsOrigins: (process.env.CORS_ORIGINS ?? "*").split(",").map((s) => s.trim()),
 
   // Ordering rules (defaults when SchoolDay.orderDeadline is null).
-  defaultDeadlineHour: Number(process.env.DEFAULT_DEADLINE_HOUR ?? 14),
-  windowOpenHour: Number(process.env.WINDOW_OPEN_HOUR ?? 8),
+  // Cutoff is 08:00 on the meal day itself, school-local time.
+  defaultDeadlineHour: Number(process.env.DEFAULT_DEADLINE_HOUR ?? 8),
+
+  // How long a generated claim code stays valid.
+  claimCodeTtlDays: Number(process.env.CLAIM_CODE_TTL_DAYS ?? 7),
 
   // The one price, in cents. Single source of truth server-side.
   lunchPriceCents: Number(process.env.LUNCH_PRICE_CENTS ?? 550),

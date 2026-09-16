@@ -47,6 +47,11 @@ model Account {
   balanceCents Int      @default(0)
   createdAt    DateTime @default(now())
 
+  /// First-login setup: when passwordHash is null the account is claimed
+  /// with this single-use code (POST /auth/claim), cleared once set.
+  claimCode        String?
+  claimCodeExpires DateTime?
+
   orders        Order[]
   announcements Announcement[]
 }
@@ -66,7 +71,7 @@ model Meal {
 }
 
 /// A school day: whether lunch is served (holidays = false).
-/// Ordering deadline is always "the day before at 14:00".
+/// Ordering deadline is always 08:00 on the day itself, school-local time.
 model SchoolDay {
   mealDate  DateTime @id // date at 00:00, local midnight
   isServing Boolean  @default(true)
