@@ -10,6 +10,8 @@ import { studentsRoutes } from "./modules/students.routes";
 import { menuAdminRoutes } from "./modules/menu-admin.routes";
 import { pushRoutes } from "./modules/push.routes";
 
+const startedAt = new Map<Request, number>();
+
 const app = new Elysia()
   .use(
     cors({
@@ -18,6 +20,23 @@ const app = new Elysia()
         : config.corsOrigins,
     }),
   )
+  .onRequest(({ request }) => {
+    startedAt.set(request, performance.now());
+  })
+  .onAfterHandle(({ request, set }) => {
+    const ms = Math.round(performance.now() - (startedAt.get(request) ?? 0));
+    startedAt.delete(request);
+    console.log(
+      `[${new Date().toISOString()}] ${request.method} ${new URL(request.url).pathname} -> ${set.status} (${ms}ms)`,
+    );
+  })
+  .onError(({ request, set, error }) => {
+    const ms = Math.round(performance.now() - (startedAt.get(request) ?? 0));
+    startedAt.delete(request);
+    console.error(
+      `[${new Date().toISOString()}] ${request.method} ${new URL(request.url).pathname} -> ${set.status ?? 500} (${ms}ms) ${(error as Error | undefined)?.message ?? error}`,
+    );
+  })
   .use(authRoutes)
   .use(meRoutes)
   .use(menuRoutes)
