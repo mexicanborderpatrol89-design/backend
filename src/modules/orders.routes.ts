@@ -28,11 +28,32 @@ function assertCanOrder(
   now: Date,
 ): void {
   const facts = dayFacts(mealOnDay.day, mealOnDay.mealDate, now);
+  // Not cooking is the only thing that closes a day now — there is no
+  // deadline, so there is no second, time-based reason to be closed.
   if (facts.holiday) throw new ApiError(409, "DEADLINE", "V tento deň sa nevarí");
-  if (!facts.open)
-    throw new ApiError(409, "DEADLINE", "Uzávierka objednávok uplynula");
   if (mealOnDay.capacity > 0 && mealOnDay.orderCount >= mealOnDay.capacity)
     throw new ApiError(409, "SOLD_OUT", "Toto jedlo je vypredané");
+}
+
+/// Postgres said two rows would collide. The only unique left on Order is the
+/// partial index "Order_one_live_order_per_student_day", so this can mean
+/// exactly one thing: two requests raced and the other one won. It is a 409,
+/// not a 500 — the pupil has a lunch, which is what they were asking for.
+///
+/// Before the partial index existed this path fired constantly, because a
+/// cancelled row kept (studentId, mealOnDayId) occupied for the rest of the
+/// day and every re-order of that dish hit it. That is fixed in the schema;
+/// this is here so a genuine race is still answered in Slovak.
+function asOrderConflict(err: unknown): never {
+  const code = (err as { code?: string })?.code;
+  if (code === "P2002") {
+    throw new ApiError(
+      409,
+      "ALREADY_ORDERED",
+      "Na tento deň už obed objednaný máte. Zmeňte ho namiesto objednávania ďalšieho.",
+    );
+  }
+  throw err;
 }
 
 export const ordersRoutes = createRouter()
@@ -99,7 +120,7 @@ export const ordersRoutes = createRouter()
             status: "ORDERED",
           },
         });
-      });
+      }).catch(asOrderConflict);
 
       set.status = 201;
       return { id: result.id, status: result.status };
@@ -144,7 +165,7 @@ export const ordersRoutes = createRouter()
           where: { id: order.id },
           data: { mealOnDayId: target.id },
         });
-      });
+      }).catch(asOrderConflict);
 
       return { id: result.id, status: result.status };
     },
@@ -170,9 +191,14 @@ export const ordersRoutes = createRouter()
         if (order.status === "SERVED")
           throw new ApiError(409, "SERVED", "Obed bol vydaný, nemožno zrušiť");
 
-        const facts = dayFacts(order.mealOnDay.day, order.mealOnDay.mealDate, now);
-        if (!facts.open)
-          throw new ApiError(409, "DEADLINE", "Uzávierka objednávok uplynula");
+        // CANCELLING IS ALWAYS ALLOWED up to the moment the lunch is served,
+        // and SERVED is already refused above. There is no deadline to miss.
+        //
+        // This used to also refuse when the day was not open, which now means
+        // one thing only: the manager has declared a holiday. Refusing then
+        // trapped a pupil holding a lunch they had paid for, on a day nobody
+        // is cooking, under the message "the deadline has passed". A holiday
+        // is exactly when a refund should be easiest to get.
 
         await tx.mealOnDay.update({
           where: { id: order.mealOnDayId },

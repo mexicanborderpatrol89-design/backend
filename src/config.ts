@@ -13,9 +13,10 @@ export const config = {
   // Comma-separated list of allowed CORS origins.
   corsOrigins: (process.env.CORS_ORIGINS ?? "*").split(",").map((s) => s.trim()),
 
-  // Ordering rules (defaults when SchoolDay.orderDeadline is null).
-  // Cutoff is 08:00 on the meal day itself, school-local time.
-  defaultDeadlineHour: Number(process.env.DEFAULT_DEADLINE_HOUR ?? 8),
+  // NO ORDERING DEADLINE SETTING. Ordering is 24/7 and there is nothing to
+  // configure: a day is orderable whenever the canteen is cooking. The old
+  // DEFAULT_DEADLINE_HOUR is gone rather than defaulted, so it cannot be set
+  // in an environment and quietly bring a cut-off back.
 
   // How long a generated claim code stays valid.
   claimCodeTtlDays: Number(process.env.CLAIM_CODE_TTL_DAYS ?? 7),

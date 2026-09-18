@@ -62,7 +62,7 @@ function dayWrap(d: Date, day: { isServing: boolean } | null, now: Date) {
     label: dayNameLabel(d),
     isServing: day ? day.isServing : true,
     open: facts.open,
-    deadline: facts.deadline.toISOString(),
+    deadline: facts.deadline,
   };
 }
 
@@ -74,9 +74,9 @@ export const menuRoutes = createRouter()
       const me = await requireAccount(headers);
       const now = new Date();
 
-      /// The calendar day. After its 08:00 deadline (school time) the card
-      /// reads closed for the rest of the day; ordering ahead moves to the
-      /// week screen. `?date=` selects a different day the same way.
+      /// The calendar day, exactly as asked for. It is open if the canteen is
+      /// cooking, whatever the time and whatever the date. `?date=` selects a
+      /// different day the same way.
       const today = query.date
         ? new Date(`${query.date}T00:00:00Z`)
         : toLocalDay(now);

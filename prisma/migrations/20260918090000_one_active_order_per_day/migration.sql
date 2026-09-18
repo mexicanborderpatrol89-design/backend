@@ -1,0 +1,12 @@
+-- The unique on (studentId, mealOnDayId) dates from before item 9, when it was
+-- the only thing stopping a second lunch. Item 9 replaced that job with
+-- "Order_one_live_order_per_student_day" (one LIVE order per pupil per day),
+-- and this one was left behind doing harm:
+--
+-- cancelling keeps the row and only sets status, so a cancelled order held
+-- (studentId, mealOnDayId) for the rest of the day. Re-ordering that dish, or
+-- changing to it, hit a unique violation that reached the client as a raw 500.
+--
+-- Dropping it is the whole fix. The constraint that matters already exists and
+-- is not touched here.
+DROP INDEX IF EXISTS "Order_studentId_mealOnDayId_key";

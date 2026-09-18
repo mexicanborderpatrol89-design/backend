@@ -54,6 +54,25 @@ model Account {
 
   orders        Order[]
   announcements Announcement[]
+  deviceTokens  DeviceToken[]
+}
+
+/// An iOS device registered for notifications.
+///
+/// The token is the primary key because it identifies a device+install, not a
+/// person: one pupil can have a phone and an iPad, and a reinstall issues a
+/// fresh token for the same device. POST /push/register upserts on it, so a
+/// phone that reissues its token does not leave a dead row behind.
+model DeviceToken {
+  token       String   @id
+  studentId   String
+  student     Account  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  platform    String // "ios"
+  environment String // "production" | "sandbox" — decides the APNs host
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+
+  @@index([studentId])
 }
 
 /// One dish that can appear on menus. Allergens keep the EU Annex II
@@ -71,7 +90,8 @@ model Meal {
 }
 
 /// A school day: whether lunch is served (holidays = false).
-/// Ordering deadline is always 08:00 on the day itself, school-local time.
+/// There is no ordering deadline: isServing is the only thing that closes a
+/// day, at any hour and on any date.
 model SchoolDay {
   mealDate  DateTime @id // date at 00:00, local midnight
   isServing Boolean  @default(true)
@@ -96,11 +116,11 @@ model MealOnDay {
   @@index([mealDate])
 }
 
-/// A student's lunch order for one day. Unique on (student, mealOnDay)
-/// prevents *double orders of the same dish*. `mealDate` is denormalised
-/// from MealOnDay so a partial unique index can enforce the business rule
-/// "one live lunch per pupil per day" (a hop through MealOnDay cannot be
-/// the target of a plain unique constraint).
+/// A student's lunch order for one day. `mealDate` is denormalised from
+/// MealOnDay so a partial unique index can enforce the business rule "one live
+/// lunch per pupil per day" (a hop through MealOnDay cannot be the target of a
+/// plain unique constraint). See the note on the constraint below for why the
+/// old unique on (student, mealOnDay) had to go.
 model Order {
   id          String      @id @default(cuid())
   studentId   String
@@ -111,7 +131,20 @@ model Order {
   status      OrderStatus @default(ORDERED)
   createdAt   DateTime    @default(now())
 
-  @@unique([studentId, mealOnDayId])
+  /// NO unique on (studentId, mealOnDayId). A cancelled order keeps its row —
+  /// cancel sets status, it does not delete — so that constraint made every
+  /// dish a pupil had ever cancelled today permanently unorderable: both
+  /// `order.create` and the `mealOnDayId` update in PATCH collided with the
+  /// dead row and surfaced as a raw 500.
+  ///
+  /// The rule that is actually wanted — one *active* order per pupil per day —
+  /// is already enforced by "Order_one_live_order_per_student_day", created in
+  /// migration 20260916090513_one_lunch_per_day. Prisma cannot express a
+  /// partial unique index, so it does not appear here:
+  ///
+  ///   CREATE UNIQUE INDEX "Order_one_live_order_per_student_day"
+  ///     ON "Order"("studentId", "mealDate")
+  ///     WHERE "status" NOT IN ('CANCELLED', 'AUTO_CANCELLED');
   @@index([studentId])
   @@index([mealOnDayId])
   @@index([studentId, mealDate])

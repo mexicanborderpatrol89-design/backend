@@ -53,28 +53,12 @@ function offsetMinutes(at: Date): number {
   return m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
 }
 
-/** `civilDay` (stored as UTC midnight by toLocalDay) at `hour` school-local
- *  time, as a real instant. Slovakia shifts clocks at 02:00–03:00 local, so
- *  an 08:00 deadline is never in an ambiguous or skipped hour. */
-export function atSchoolHour(civilDay: Date, hour: number): Date {
-  const naive = new Date(civilDay);
-  naive.setUTCHours(hour, 0, 0, 0);
-  return new Date(naive.getTime() - offsetMinutes(naive) * 60_000);
-}
-
-/** Ordering deadline: 08:00 on the meal day itself, in school time.
- *  A pupil ordering Thursday's lunch has until Thursday 08:00. */
-export function defaultDeadline(mealDay: Date): Date {
-  return atSchoolHour(mealDay, config.defaultDeadlineHour);
-}
-
-/** Seconds until `deadline` from `now` (0 if already past). */
-export function secondsUntil(now: Date, deadline: Date): number {
-  return Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
-}
-
-/** The window has no lower bound: a day is orderable from the moment its menu
- *  exists until the deadline passes. */
-export function isOrderingOpen(now: Date, deadline: Date): boolean {
-  return now < deadline;
-}
+/* THE ORDERING DEADLINE USED TO LIVE HERE. It is gone.
+ *
+ * atSchoolHour / defaultDeadline / secondsUntil / isOrderingOpen were removed
+ * when the school chose 24/7 ordering: a day is orderable whenever the canteen
+ * is cooking, so there is no hour to compute and nothing to compare a clock
+ * against. See dayFacts() in lib/menu.ts, which is now one line.
+ *
+ * If a cut-off is ever wanted again, this is the file it belongs in — but it
+ * would be a new decision, not a switch someone forgot to flip. */
