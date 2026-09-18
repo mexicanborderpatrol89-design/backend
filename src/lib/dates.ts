@@ -1,5 +1,3 @@
-import { config } from "../config";
-
 /// Local school timezone. Slovakia is UTC+1 / UTC+2 (CET/CEST).
 const SCHOOL_TZ = "Europe/Bratislava";
 
@@ -38,19 +36,6 @@ export function schoolWeek(d: Date): Date[] {
     x.setUTCDate(mon.getUTCDate() + i);
     return x;
   });
-}
-
-/** UTC offset of SCHOOL_TZ, in minutes, at the instant `at`. */
-function offsetMinutes(at: Date): number {
-  const name =
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: SCHOOL_TZ,
-      timeZoneName: "longOffset",
-    })
-      .formatToParts(at)
-      .find((p) => p.type === "timeZoneName")?.value ?? "GMT+00:00";
-  const m = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
-  return m ? (m[1] === "-" ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
 }
 
 /* THE ORDERING DEADLINE USED TO LIVE HERE. It is gone.
